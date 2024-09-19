@@ -1,12 +1,15 @@
-# serializers.py
 from rest_framework import serializers
 from .models import CustomUser
+from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
+import re
 
-class CustomUserSerializer(serializers.ModelSerializer):
+class UserRegisterSerializer(serializers.ModelSerializer):
+    password2 = serializers.CharField(style={'input_type':'password'}, write_only=True)
     class Meta:
         model = CustomUser
         fields = [
-            'username', 'email', 'password', 'first_name', 'last_name', 'address',
+            'username', 'email', 'password', "password2", 'first_name', 'last_name', 'address',
             'phone_number', 'country', 'state', 'city', 'pincode', 'profile_picture',
             'gender', 'dob'
         ]
@@ -23,6 +26,28 @@ class CustomUserSerializer(serializers.ModelSerializer):
             'dob': {'required': False}
         }
     
+    def validate(self, attrs):
+        password = attrs.get('password')
+        password2 = attrs.get('password2')
+        if password != password2:
+            raise serializers.ValidationError("Password and Confirm Password doesn't match")
+        return attrs
+
+    def validate_email(self, value):
+        try:
+            validate_email(value)
+        except ValidationError:
+            raise serializers.ValidationError("Invalid email format.")
+        
+        email_regex = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z]+\.[a-zA-Z]{2,}$'
+        if not re.match(email_regex, value):
+            raise serializers.ValidationError("Email format is invalid. Domain must not contain numbers.")
+
+        if CustomUser.objects.filter(email=value).exists():
+            raise serializers.ValidationError("This email is already registered.")
+        
+        return value
+
     def create(self, validated_data):
         user = CustomUser(
             username=validated_data['username'],
@@ -40,7 +65,18 @@ class CustomUserSerializer(serializers.ModelSerializer):
             dob=validated_data.get('dob', None),
         )
         user.set_password(validated_data['password'])
-        user.is_superuser = True  # Make the user a superuser
+        user.is_superuser = True
         user.is_staff = True  # Allow access to the admin panel
         user.save()
         return user
+    
+class UserLoginSerializer(serializers.ModelSerializer):
+  email = serializers.EmailField(max_length=255)
+  class Meta:
+    model = CustomUser
+    fields = ['email', 'password']
+
+class UserProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CustomUser
+        fields = ['username', 'email', 'first_name', 'last_name', 'address', 'phone_number', 'country', 'state', 'city', 'pincode', 'profile_picture', 'gender']

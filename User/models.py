@@ -1,9 +1,13 @@
-# models.py
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.core.validators import RegexValidator
 
 class CustomUser(AbstractUser):
+    email = models.EmailField(
+      verbose_name='Email',
+      max_length=255,
+      unique=True,
+    )
     first_name = models.CharField(max_length=50, blank=True, null=True)
     last_name = models.CharField(max_length=50, blank=True, null=True)
     address = models.CharField(max_length=500, blank=True, null=True, default='')
@@ -25,3 +29,6 @@ class CustomUser(AbstractUser):
     )
     gender = models.CharField(max_length=1, choices=GENDER_CHOICES, blank=True, null=True, default='M')
     dob = models.DateField(blank=True, null=True)
+
+    def __str__(self):
+        return self.email
