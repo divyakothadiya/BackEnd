@@ -37,6 +37,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'User',
+    'rest_framework',
 ]
 
 MIDDLEWARE = [
@@ -69,14 +71,19 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'System.wsgi.application'
 
+AUTH_USER_MODEL = 'User.CustomUser'
 
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'BackEnd', #change it databasename
+        'USER': 'postgres', #change it database user name
+        'PASSWORD': 'admin@123', # change user database password
+        'HOST': 'localhost',  
+        'PORT': '5432', 
     }
 }
 
