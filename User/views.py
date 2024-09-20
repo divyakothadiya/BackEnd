@@ -10,6 +10,8 @@ from django.contrib.auth import authenticate
 from .models import CustomUser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.permissions import AllowAny
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+
 
 def get_tokens_for_user(user):
     refresh = RefreshToken.for_user(user)
@@ -160,32 +162,33 @@ class ProfileUserView(generics.RetrieveAPIView):
                 'data': str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-# class UserProfileUpdateView(generics.CreateAPIView):
-#     # permission_classes = [IsAuthenticated]
-#     parser_classes = [MultiPartParser, FormParser, JSONParser]  # Adding JSONParser
-    
-#     def put(self, request, format=None):
-#         try:
-#             profile, created = CustomUser.objects.get_or_create(email=request.user)
-#             print(profile)
-#             serializer = UserProfileSerializer(profile, data=request.data, partial=True)
-#             if serializer.is_valid():
-#                 serializer.save()
-#                 return Response({
-#                     'status': 200,
-#                     'message': 'Profile updated successfully',
-#                     'data': serializer.data
-#                 }, status=status.HTTP_200_OK)
+class ProfileUserUpdateView(generics.CreateAPIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]  # Adding JSONParser
+    serializer_class = UserProfileSerializer
+
+    def put(self, request, format=None):
+        try:
+            profile, created = CustomUser.objects.get_or_create(email=request.user)
+            print(profile)
+            serializer = self.get_serializer(profile, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    'status': 200,
+                    'message': 'Profile updated successfully',
+                    'data': serializer.data
+                }, status=status.HTTP_200_OK)
             
-#             return Response({
-#                 'status': 400,
-#                 'message': 'Something went wrong',
-#                 'data': serializer.errors
-#             }, status=status.HTTP_400_BAD_REQUEST)
+            return Response({
+                'status': 400,
+                'message': 'Something went wrong',
+                'data': serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
         
-#         except Exception as e:
-#             return Response({
-#                 'status': 500,
-#                 'message': 'An error occurred',
-#                 'data': str(e)
-#             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception as e:
+            return Response({
+                'status': 500,
+                'message': 'An error occurred',
+                'data': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
