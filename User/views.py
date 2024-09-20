@@ -8,7 +8,8 @@ from rest_framework.exceptions import ValidationError
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from .models import CustomUser
-#from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny
 
 def get_tokens_for_user(user):
     refresh = RefreshToken.for_user(user)
@@ -26,8 +27,7 @@ class RegisterUserView(generics.CreateAPIView):
         try:
             check_empty_fields(request.data)
             serializer = self.get_serializer(data=request.data)
-            #serializer.is_valid(raise_exception=True)
-            #headers = self.get_success_headers(serializer.data)
+            
             if serializer.is_valid():
                     self.perform_create(serializer)
                     return Response({
@@ -56,7 +56,9 @@ class RegisterUserView(generics.CreateAPIView):
 
 class LoginUserView(generics.CreateAPIView):
     renderer_classes = [CustomUserRenderer]
+    permission_classes = [AllowAny] 
     serializer_class = UserLoginSerializer
+    
     def post(self, request, format=None):
         try:
             check_empty_fields(request.data)
@@ -74,7 +76,7 @@ class LoginUserView(generics.CreateAPIView):
 
             # Authenticate the user using the username and password
             user = authenticate(request, username=username, password=password)
-            print("user:......................", user)
+            
             if user is not None:
                 # Check if user profile exists
                 try:
@@ -97,7 +99,7 @@ class LoginUserView(generics.CreateAPIView):
                     token = get_tokens_for_user(user)
 
                     profile_data = UserProfileSerializer(user_profile).data if user_profile else {}
-                    print("before response:......................")
+                    
                     return Response({
                         'token': token,
                         'msg': 'Login Success',
@@ -127,3 +129,63 @@ class LoginUserView(generics.CreateAPIView):
                 'message': 'An error occurred',
                 'data': str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class ProfileUserView(generics.RetrieveAPIView):
+    
+    permission_classes = [IsAuthenticated]
+    serializer_class = UserProfileSerializer
+    
+    def get(self, request, *args, **kwargs):
+        
+        try:
+            profile = request.user
+            serializer = self.get_serializer(profile)
+            
+            return Response({
+                'status': status.HTTP_200_OK,
+                'message': 'User profile retrieved successfully.',
+                'data': serializer.data
+            }, status=status.HTTP_200_OK)
+        except CustomUser.DoesNotExist:
+            return Response({
+                'status': status.HTTP_404_NOT_FOUND,
+                'message': 'User profile not found.',
+                'data': {}
+            }, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({
+                'status': status.HTTP_500_INTERNAL_SERVER_ERROR,
+                'message': 'An error occurred.',
+                'data': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# class UserProfileUpdateView(generics.CreateAPIView):
+#     # permission_classes = [IsAuthenticated]
+#     parser_classes = [MultiPartParser, FormParser, JSONParser]  # Adding JSONParser
+    
+#     def put(self, request, format=None):
+#         try:
+#             profile, created = CustomUser.objects.get_or_create(email=request.user)
+#             print(profile)
+#             serializer = UserProfileSerializer(profile, data=request.data, partial=True)
+#             if serializer.is_valid():
+#                 serializer.save()
+#                 return Response({
+#                     'status': 200,
+#                     'message': 'Profile updated successfully',
+#                     'data': serializer.data
+#                 }, status=status.HTTP_200_OK)
+            
+#             return Response({
+#                 'status': 400,
+#                 'message': 'Something went wrong',
+#                 'data': serializer.errors
+#             }, status=status.HTTP_400_BAD_REQUEST)
+        
+#         except Exception as e:
+#             return Response({
+#                 'status': 500,
+#                 'message': 'An error occurred',
+#                 'data': str(e)
+#             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

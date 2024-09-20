@@ -37,8 +37,10 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'User',
     'rest_framework',
+    'rest_framework_simplejwt',
+    'corsheaders',
+    'User',
 ]
 
 MIDDLEWARE = [
@@ -129,11 +131,25 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",  # or your frontend domain
+]
+
+# Django Rest Framework settings
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework_simplejwt.authentication.JWTAuthentication',  # Use JWT authentication
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',  # Enforce authentication globally
+    ],
+}
+
 
 #Jwt auto generate tocken and expires details
 from datetime import timedelta
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=100),
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
     "ROTATE_REFRESH_TOKENS": False,
     "BLACKLIST_AFTER_ROTATION": False,
