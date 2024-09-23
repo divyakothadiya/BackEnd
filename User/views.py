@@ -23,6 +23,7 @@ def get_tokens_for_user(user):
 
 class RegisterUserView(generics.CreateAPIView):
     renderer_classes = [CustomUserRenderer]
+    permission_classes = [AllowAny] 
     serializer_class = UserRegisterSerializer
 
     def post(self, request, *args, **kwargs):
@@ -186,6 +187,27 @@ class ProfileUserUpdateView(generics.CreateAPIView):
                 'data': serializer.errors
             }, status=status.HTTP_400_BAD_REQUEST)
         
+        except Exception as e:
+            return Response({
+                'status': 500,
+                'message': 'An error occurred',
+                'data': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class DeleteUserView(generics.DestroyAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = UserProfileSerializer
+
+    def delete(self, request, *args, **kwargs):
+        try:
+            user = request.user
+            user.delete()
+            return Response({
+                'status': 200,
+                'message': 'User deleted successfully',
+                'data': {}
+            }, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({
                 'status': 500,
