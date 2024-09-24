@@ -29,6 +29,8 @@ class CustomUser(AbstractUser):
     )
     gender = models.CharField(max_length=1, choices=GENDER_CHOICES, blank=True, null=True, default='M')
     dob = models.DateField(blank=True, null=True)
+    is_customer = models.BooleanField(default=False)
+    is_retailer = models.BooleanField(default=False)
 
     def __str__(self):
         return self.email

@@ -3,15 +3,23 @@ from .models import CustomUser
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 import re
+from Retailer_User.models import Retailer
+
+class RetailerSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Retailer
+        fields = ['gst_no', 'organization']
 
 class UserRegisterSerializer(serializers.ModelSerializer):
     password2 = serializers.CharField(style={'input_type':'password'}, write_only=True)
+    retailer = RetailerSerializer(required=False)
+    
     class Meta:
         model = CustomUser
         fields = [
             'username', 'email', 'password', "password2", 'first_name', 'last_name', 'address',
             'phone_number', 'country', 'state', 'city', 'pincode', 'profile_picture',
-            'gender', 'dob'
+            'gender', 'dob', 'retailer', 'is_retailer', 'is_customer'
         ]
         extra_kwargs = {
             'password': {'write_only': True},
@@ -23,7 +31,9 @@ class UserRegisterSerializer(serializers.ModelSerializer):
             'pincode': {'required': False},
             'profile_picture': {'required': False},
             'gender': {'required': False},
-            'dob': {'required': False}
+            'dob': {'required': False},
+            'is_retailer': {'required': False, 'default': False},
+            'is_customer': {'required': False, 'default': False},
         }
     
     def validate(self, attrs):
@@ -49,6 +59,7 @@ class UserRegisterSerializer(serializers.ModelSerializer):
         return value
 
     def create(self, validated_data):
+        retailer_data = validated_data.pop('retailer', None)
         user = CustomUser(
             username=validated_data['username'],
             email=validated_data['email'],
@@ -63,11 +74,17 @@ class UserRegisterSerializer(serializers.ModelSerializer):
             profile_picture=validated_data.get('profile_picture', ''),
             gender=validated_data.get('gender', 'M'),
             dob=validated_data.get('dob', None),
+            is_retailer=validated_data.get('is_retailer', False),
+            is_customer=validated_data.get('is_customer', False),
         )
         user.set_password(validated_data['password'])
         user.is_superuser = True
         user.is_staff = True  # Allow access to the admin panel
         user.save()
+
+        if retailer_data:
+            Retailer.objects.create(user=user, **retailer_data)
+        
         return user
     
 class UserLoginSerializer(serializers.ModelSerializer):
