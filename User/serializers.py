@@ -88,12 +88,21 @@ class UserRegisterSerializer(serializers.ModelSerializer):
         return user
     
 class UserLoginSerializer(serializers.ModelSerializer):
-  email = serializers.EmailField(max_length=255)
-  class Meta:
-    model = CustomUser
-    fields = ['email', 'password']
+    email = serializers.EmailField(max_length=255)
+    # password = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
+    is_customer = serializers.BooleanField(required=False, default=False)
+    is_retailer = serializers.BooleanField(required=False, default=False)
+
+    class Meta:
+        model = CustomUser
+        fields = ['email', 'password', 'is_customer', 'is_retailer']  
+
+class VerifyUserSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    otp = serializers.IntegerField()
+    is_retailer = serializers.BooleanField(required=False, default=False) 
 
 class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomUser
-        fields = ['username', 'email', 'first_name', 'last_name', 'address', 'phone_number', 'country', 'state', 'city', 'pincode', 'profile_picture', 'gender', 'dob']
+        fields = ['username', 'email', 'first_name', 'last_name', 'address', 'phone_number', 'country', 'state', 'city', 'pincode', 'profile_picture', 'gender', 'dob', 'is_retailer', 'is_customer']

@@ -31,6 +31,8 @@ class CustomUser(AbstractUser):
     dob = models.DateField(blank=True, null=True)
     is_customer = models.BooleanField(default=False)
     is_retailer = models.BooleanField(default=False)
+    otp = models.IntegerField(max_length=6,blank=True, null=True)
+    otp_expiry = models.DateTimeField(blank=True, null=True)
 
     def __str__(self):
         return self.email

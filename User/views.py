@@ -1,9 +1,9 @@
 from rest_framework import generics
 from rest_framework.response import Response
 from rest_framework import status
-from .serializers import UserRegisterSerializer,UserLoginSerializer,UserProfileSerializer
+from .serializers import UserRegisterSerializer,UserLoginSerializer,UserProfileSerializer,VerifyUserSerializer
 from .renderers import CustomUserRenderer
-from .utils import check_empty_fields
+from Common.utils import check_empty_fields, send_otp_via_email
 from rest_framework.exceptions import ValidationError
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
@@ -11,6 +11,8 @@ from .models import CustomUser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.permissions import AllowAny
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+from datetime import datetime
+from Retailer_User.models import Retailer
 
 
 def get_tokens_for_user(user):
@@ -19,7 +21,6 @@ def get_tokens_for_user(user):
         'refresh': str(refresh),
         'access': str(refresh.access_token),
     }
-
 
 class RegisterUserView(generics.CreateAPIView):
     renderer_classes = [CustomUserRenderer]
@@ -67,9 +68,10 @@ class LoginUserView(generics.CreateAPIView):
             check_empty_fields(request.data)
             serializer = self.get_serializer(data=request.data)
             serializer.is_valid(raise_exception=True)
+
             email = serializer.data.get('email')
             password = serializer.data.get('password')
-            # Fetch the user by email
+
             try:
                 user_obj = CustomUser.objects.get(email=email)
                 username = user_obj.username
@@ -79,45 +81,36 @@ class LoginUserView(generics.CreateAPIView):
 
             # Authenticate the user using the username and password
             user = authenticate(request, username=username, password=password)
-            
             if user is not None:
-                # Check if user profile exists
-                try:
-                    user_profile = user_obj
-                except CustomUser.DoesNotExist:
-                    user_profile = None
-                # Define required fields for profile completion
-                required_fields = ['username', 'email', 'first_name', 'last_name', 'address', 'phone_number', 'country', 'state', 'city', 'pincode', 'profile_picture', 'gender']
-                
-                if user_profile:
-                    incomplete_profile = {}
-                    for field in required_fields:
-                        value = getattr(user_profile, field, None)
-                        if value in [None, '', 'null']:
-                            incomplete_profile[field] = value
-                    
-                    is_profile_complete_flag = len(incomplete_profile) == 0
-
-                    # Generate the token
-                    token = get_tokens_for_user(user)
-
-                    profile_data = UserProfileSerializer(user_profile).data if user_profile else {}
-                    
-                    return Response({
-                        'token': token,
-                        'msg': 'Login Success',
-                        'is_profile_complete': is_profile_complete_flag,
-                        'profile': profile_data,  # Profile data
-                        'incomplete_profile': incomplete_profile,  # Incomplete fields
-                    }, status=status.HTTP_200_OK)
-                else:
-                    return Response({
-                        'token': get_tokens_for_user(user),
-                        'msg': 'Login Success',
-                        'is_profile_complete': False,
-                        'profile': {},  # Empty profile if user_profile is None
-                        'incomplete_profile': required_fields,  # All required fields are incomplete
-                    }, status=status.HTTP_200_OK)
+                is_customer = serializer.data.get('is_customer', False)
+                is_retailer = serializer.data.get('is_retailer', False)
+                if is_retailer:
+                    # If trying to log in as a retailer
+                    if user_obj.is_retailer:
+                        # Include retailer details in the response
+                        retailer_data = self.get_retailer_details(user=user)
+                        return self.create_response(user=user, retailer_data=retailer_data)
+                    elif user_obj.is_customer and not user_obj.is_retailer:
+                        send_otp_via_email(request, email)
+                        return Response({
+                            'status': 'verification_needed',
+                            'message': "You need to verify your account as a retailer. An OTP has been sent to your email.",
+                            'data': serializer.data,
+                        }, status=status.HTTP_403_FORBIDDEN)
+                elif is_customer:
+                    # Customer login logic
+                    if user_obj.is_customer:
+                        print("is_customer",user_obj)
+                        return self.create_response(user=user)
+                    elif user_obj.is_retailer and not user_obj.is_customer:
+                        # Send OTP for customer verification
+                        send_otp_via_email(request, email)
+                        return Response({
+                            'status': 'verification_needed',
+                            'message': "You need to verify your account as a customer. An OTP has been sent to your email.",
+                            'data': serializer.data,
+                        }, status=status.HTTP_403_FORBIDDEN)
+            
             else:
                 return Response({'errors': {'non_field_errors': ['Email or Password is not Valid']}}, status=status.HTTP_404_NOT_FOUND)
         except ValidationError as e:
@@ -132,6 +125,55 @@ class LoginUserView(generics.CreateAPIView):
                 'message': 'An error occurred',
                 'data': str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def create_response(self, user, retailer_data=None):
+            required_fields = ['username', 'email', 'first_name', 'last_name', 'address', 'phone_number', 'country', 'state', 'city', 'pincode', 'profile_picture', 'gender', 'dob', 'is_customer', 'is_retailer']
+            print("create_response",user)
+            incomplete_profile = {}
+            for field in required_fields:
+                value = getattr(user, field, None)
+                if value in [None, '', 'null']:
+                    incomplete_profile[field] = value
+            
+            is_profile_complete_flag = len(incomplete_profile) == 0
+
+            token = get_tokens_for_user(user)
+
+            profile_data = UserProfileSerializer(user).data if user else {}
+
+            if retailer_data:
+                profile_data['retailer'] = retailer_data
+
+            response_data = {
+                'token': token,
+                'msg': 'Login Success',
+                'is_profile_complete': is_profile_complete_flag,
+                'profile': profile_data,
+                'incomplete_profile': incomplete_profile,
+            }
+
+            
+            return Response(response_data, status=status.HTTP_200_OK)
+
+    # Method to fetch retailer details
+    def get_retailer_details(self, user):
+            retailer = Retailer.objects.filter(user=user).first()
+            try:
+                retailer = Retailer.objects.filter(user=user).first()
+                if retailer is not None:
+                    retailer_data = {
+                        'gst_no': retailer.gst_no,
+                        'organization': retailer.organization,
+                    }
+                else:
+                    retailer_data = {
+                        'gst_no': '',
+                        'organization': '',
+                    }
+            except retailer.DoesNotExist:
+                retailer_data = None
+            
+            return retailer_data
 
 
 class ProfileUserView(generics.RetrieveAPIView):
@@ -194,7 +236,6 @@ class ProfileUserUpdateView(generics.CreateAPIView):
                 'data': str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-
 class DeleteUserView(generics.DestroyAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = UserProfileSerializer
@@ -208,6 +249,62 @@ class DeleteUserView(generics.DestroyAPIView):
                 'message': 'User deleted successfully',
                 'data': {}
             }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                'status': 500,
+                'message': 'An error occurred',
+                'data': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+class VerifyOTP(generics.CreateAPIView):
+    permission_classes = [AllowAny] 
+    def post(self, request):
+        try:
+            check_empty_fields(request.data)
+            serializer = VerifyUserSerializer(data=request.data)
+            if serializer.is_valid():
+                email = serializer.data['email']
+                otp = serializer.data['otp']
+                user = CustomUser.objects.filter(email=email).first()
+
+                if not user:
+                    return Response({
+                        'status': 400,
+                        'message': 'Something went wrong',
+                        'data': 'Invalid user',
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+                if user.otp != otp:
+                    print(user.otp)
+                    print(otp)
+                    return Response({
+                        'status': 400,
+                        'message': 'Something went wrong',
+                        'data': 'Invalid OTP',
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+                if 'is_retailer' in request.data and request.data['is_retailer']:
+                    print('retailer')
+                    user.is_retailer = True
+                    message = 'User verified and registered as retailer successfully.'
+                else:
+                    user.is_customer = True
+                    message = 'User verified and registered as customer successfully.'
+
+                user.otp = None  
+                user.otp_expiry = None 
+                user.save()
+
+                return Response({
+                    'status': 200,
+                    'message': message,
+                    'data': {'msg': message},
+                })
+            return Response({
+                'status': 400,
+                'message': 'Something went wrong',
+                'data': serializer.errors,
+            }, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response({
                 'status': 500,
